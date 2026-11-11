@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#102a27">
+<meta name="description" content="Explore a ilha, encontre os fragmentos do mapa e descubra o tesouro pirata.">
+<link rel="manifest" href="manifest.webmanifest">
+<title>O Mistério do Tesouro Pirata</title>
+<style>
+:root{--gold:#f6c453;--ink:#102a27;--panel:rgba(8,25,24,.88)}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#102a27;color:#fff;font-family:system-ui,-apple-system,Segoe UI,sans-serif;touch-action:none}
+#game{position:absolute;inset:0;width:100%;height:100%;display:block}
+#hud{position:absolute;top:env(safe-area-inset-top,10px);left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:12px;gap:8px;pointer-events:none}
+.pill{background:var(--panel);border:1px solid #d7b45a66;border-radius:14px;padding:8px 12px;font-size:13px;box-shadow:0 5px 18px #0005}
+#title{font-weight:900;color:var(--gold);letter-spacing:.4px;font-size:14px}
+#stats{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+#message{position:absolute;top:82px;left:50%;transform:translateX(-50%);max-width:88%;text-align:center;background:var(--panel);border:1px solid #f6c45388;padding:9px 14px;border-radius:12px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
+#message.show{opacity:1}
+#joystick{position:absolute;left:22px;bottom:calc(25px + env(safe-area-inset-bottom));width:128px;height:128px;border-radius:50%;background:#ffffff20;border:2px solid #ffffff55;box-shadow:inset 0 0 18px #0005;touch-action:none}
+#stick{position:absolute;width:54px;height:54px;border-radius:50%;left:35px;top:35px;background:linear-gradient(#f7d47a,#b97a2b);border:2px solid #fff9;box-shadow:0 4px 12px #0008}
+#hint{position:absolute;right:16px;bottom:calc(30px + env(safe-area-inset-bottom));max-width:44%;text-align:right;font-size:11px;color:#fffbd2;text-shadow:0 2px 5px #000}
+#action{position:absolute;right:20px;bottom:calc(88px + env(safe-area-inset-bottom));width:68px;height:68px;border-radius:50%;border:2px solid #fff9;background:linear-gradient(#e5b84e,#9a5d21);color:#fff;font-weight:900;font-size:12px;box-shadow:0 5px 14px #0008}
+#start{position:absolute;inset:0;background:linear-gradient(180deg,#09221de8,#09221d99),url('') center/cover;display:flex;align-items:center;justify-content:center;padding:22px}
+.card{max-width:430px;width:100%;background:#102a27f2;border:1px solid #e6bd5b88;border-radius:22px;padding:24px;text-align:center;box-shadow:0 18px 60px #0009}
+.card h1{font-size:clamp(25px,7vw,36px);line-height:1.05;color:var(--gold);margin:0 0 12px}
+.card p{color:#e8e0c8;line-height:1.5;font-size:14px}
+button{cursor:pointer}
+#play{background:var(--gold);color:#35230b;border:0;border-radius:14px;padding:14px 24px;font-weight:900;font-size:16px;width:100%;margin-top:8px}
+#toast{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);font-size:11px;color:#ffffffa8;white-space:nowrap}
+@media(min-width:700px){#joystick{width:150px;height:150px}#stick{left:43px;top:43px}#hint{font-size:13px}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud">
+ <div class="pill"><div id="title">☠ O MISTÉRIO DO TESOURO PIRATA</div><div style="font-size:11px;color:#e8dfc4">Ilha da Caveira • Exploração</div></div>
+ <div id="stats">
+  <div class="pill">🧩 <b id="pieces">0/3</b></div>
+  <div class="pill">❤️ <b id="lives">3</b></div>
+ </div>
+</div>
+<div id="message"></div>
+<div id="joystick"><div id="stick"></div></div>
+<button id="action">AÇÃO</button>
+<div id="hint">Use o joystick para explorar.<br>Toque em AÇÃO perto de objetos.</div>
+<div id="toast">Protótipo de exploração • progresso reinicia ao recarregar</div>
+<div id="start">
+ <div class="card">
+  <div style="font-size:48px;margin-bottom:8px">🏴‍☠️</div>
+  <h1>O Mistério do<br>Tesouro Pirata</h1>
+  <p>Uma ilha esquecida guarda um tesouro. Encontre os <b>3 fragmentos do mapa</b>, desvie das armadilhas e descubra onde está o baú!</p>
+  <p style="font-size:12px">Controles: joystick no canto inferior esquerdo e botão AÇÃO para interagir.</p>
+  <button id="play">ENTRAR NA ILHA</button>
+ </div>
+</div>
+<script>
+(()=>{
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+let W=0,H=0,dpr=1,started=false,won=false;
+function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}
+addEventListener('resize',resize);resize();
+const world={w:2200,h:1600};
+const player={x:330,y:340,r:16,speed:3.2,lives:3,inv:0};
+const camera={x:0,y:0};
+const pieces=[
+ {x:610,y:390,got:false,emoji:'📜'},
+ {x:1510,y:520,got:false,emoji:'🗺️'},
+ {x:1120,y:1190,got:false,emoji:'📜'}
+];
+const traps=[
+ {x:880,y:710,r:42,hit:false},{x:1740,y:1040,r:46,hit:false},
+ {x:470,y:1190,r:40,hit:false},{x:1260,y:310,r:38,hit:false}
+];
+const trees=[];
+let seed=42;function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296}
+for(let i=0;i<95;i++){let x=100+rand()*2000,y=100+rand()*1400;if(Math.hypot(x-player.x,y-player.y)>130)trees.push({x,y,r:18+rand()*18})}
+const ruins=[{x:800,y:420},{x:1450,y:900},{x:620,y:980},{x:1800,y:400}];
+const chest={x:1900,y:1320};
+let joy={x:0,y:0},joyActive=false,joyId=null;
+const base=document.getElementById('joystick'),stick=document.getElementById('stick');
+function setJoy(e){const r=base.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=e.clientX-cx,dy=e.clientY-cy,len=Math.hypot(dx,dy),max=43;if(len>max){dx=dx/len*max;dy=dy/len*max}joy.x=dx/max;joy.y=dy/max;stick.style.transform=`translate(${dx}px,${dy}px)`}
+base.addEventListener('pointerdown',e=>{joyActive=true;joyId=e.pointerId;base.setPointerCapture(e.pointerId);setJoy(e)});
+base.addEventListener('pointermove',e=>{if(joyActive&&e.pointerId===joyId)setJoy(e)});
+function release(){joyActive=false;joy.x=joy.y=0;stick.style.transform='translate(0,0)'}
+base.addEventListener('pointerup',release);base.addEventListener('pointercancel',release);
+const keys={};addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+let msgTimer;function say(t){const el=document.getElementById('message');el.textContent=t;el.classList.add('show');clearTimeout(msgTimer);msgTimer=setTimeout(()=>el.classList.remove('show'),2300)}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function update(){
+ if(!started||won)return;
+ let dx=joy.x+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
+ let dy=joy.y+(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
+ let m=Math.hypot(dx,dy);if(m>1){dx/=m;dy/=m}
+ player.x=Math.max(45,Math.min(world.w-45,player.x+dx*player.speed));
+ player.y=Math.max(45,Math.min(world.h-45,player.y+dy*player.speed));
+ if(player.inv>0)player.inv--;
+ for(const p of pieces)if(!p.got&&dist(player,p)<34){p.got=true;document.getElementById('pieces').textContent=pieces.filter(x=>x.got).length+'/3';say('Fragmento encontrado! Continue procurando.')}
+ for(const t of traps)if(dist(player,t)<t.r+8&&player.inv===0){player.lives--;player.inv=100;document.getElementById('lives').textContent=player.lives;say('Armadilha! Você perdeu uma vida.');if(player.lives<=0){say('Você ficou sem vidas! Toque em AÇÃO para recomeçar.');won=false}}
+ camera.x=Math.max(0,Math.min(world.w-W,player.x-W/2));camera.y=Math.max(0,Math.min(world.h-H,player.y-H/2));
+}
+function draw(){
+ ctx.clearRect(0,0,W,H);
+ // water
+ ctx.fillStyle='#164e57';ctx.fillRect(0,0,W,H);
+ // island ground
+ ctx.save();ctx.translate(-camera.x,-camera.y);
+ ctx.fillStyle='#c7aa6d';ctx.beginPath();ctx.ellipse(world.w/2,world.h/2,world.w*.48,world.h*.47,0,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#477849';ctx.beginPath();ctx.ellipse(world.w/2,world.h/2,world.w*.435,world.h*.425,0,0,Math.PI*2);ctx.fill();
+ // paths
+ ctx.strokeStyle='#b9a06b';ctx.lineWidth=52;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(330,340);ctx.quadraticCurveTo(700,500,900,800);ctx.quadraticCurveTo(1300,1000,1900,1320);ctx.stroke();
+ // patches
+ for(let i=0;i<170;i++){let x=(i*137)%world.w,y=(i*239)%world.h;ctx.fillStyle=i%2?'#59844a':'#668c4b';ctx.globalAlpha=.35;ctx.beginPath();ctx.arc(x,y,3+(i%5),0,7);ctx.fill()}ctx.globalAlpha=1;
+ // ruins
+ for(const r of ruins){ctx.fillStyle='#827c69';ctx.fillRect(r.x-34,r.y-26,68,52);ctx.fillStyle='#a49a7c';ctx.fillRect(r.x-27,r.y-34,54,13);ctx.fillStyle='#3a5840';ctx.fillRect(r.x-8,r.y-12,16,30)}
+ // trees
+ for(const t of trees){ctx.fillStyle='#493a27';ctx.fillRect(t.x-4,t.y,8,20);ctx.fillStyle='#174c35';ctx.beginPath();ctx.arc(t.x,t.y,t.r,0,7);ctx.fill();ctx.fillStyle='#2c6840';ctx.beginPath();ctx.arc(t.x-7,t.y-7,t.r*.58,0,7);ctx.fill()}
+ // traps
+ for(const t of traps){ctx.fillStyle='#5a3a24';ctx.beginPath();ctx.arc(t.x,t.y,t.r,0,7);ctx.fill();ctx.strokeStyle='#d6b16a';ctx.lineWidth=3;ctx.beginPath();ctx.arc(t.x,t.y,t.r-7,0,7);ctx.stroke();ctx.fillStyle='#e5c078';ctx.font='bold 22px sans-serif';ctx.textAlign='center';ctx.fillText('⚠',t.x,t.y+8)}
+ // map pieces
+ for(const p of pieces)if(!p.got){ctx.font='30px serif';ctx.textAlign='center';ctx.fillText(p.emoji,p.x,p.y+10);ctx.fillStyle='#fff3b0';ctx.beginPath();ctx.arc(p.x,p.y-12,20,0,7);ctx.strokeStyle='#f6d46c';ctx.stroke()}
+ // chest
+ ctx.font='42px serif';ctx.textAlign='center';ctx.fillText('🧰',chest.x,chest.y+12);
+ // player shadow/body
+ ctx.fillStyle='#0005';ctx.beginPath();ctx.ellipse(player.x,player.y+12,18,8,0,0,7);ctx.fill();
+ ctx.fillStyle=player.inv>0&&Math.floor(player.inv/7)%2?'#ffffff':'#e6b65b';ctx.beginPath();ctx.arc(player.x,player.y,15,0,7);ctx.fill();ctx.fillStyle='#34251b';ctx.fillRect(player.x-10,player.y-14,20,5);ctx.fillStyle='#f1d9a5';ctx.fillRect(player.x-8,player.y-4,16,6);
+ ctx.restore();
+ // minimap
+ const mw=94,mh=68,mx=W-mw-14,my=H*.5-34;ctx.fillStyle='#061b19cc';ctx.fillRect(mx,my,mw,mh);ctx.strokeStyle='#e7c56d';ctx.strokeRect(mx,my,mw,mh);ctx.fillStyle='#6a9b59';ctx.beginPath();ctx.ellipse(mx+mw/2,my+mh/2,mw*.43,mh*.43,0,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(mx+player.x/world.w*mw,my+player.y/world.h*mh,3,0,7);ctx.fill();ctx.fillStyle='#f4cb54';ctx.beginPath();ctx.arc(mx+chest.x/world.w*mw,my+chest.y/world.h*mh,3,0,7);ctx.fill();
+}
+function loop(){update();draw();requestAnimationFrame(loop)}loop();
+document.getElementById('play').onclick=()=>{started=true;document.getElementById('start').style.display='none';say('Encontre os três fragmentos do mapa!')};
+document.getElementById('action').onclick=()=>{
+ if(player.lives<=0){player.lives=3;player.x=330;player.y=340;pieces.forEach(p=>p.got=false);document.getElementById('pieces').textContent='0/3';document.getElementById('lives').textContent='3';say('Nova expedição iniciada!');return}
+ if(dist(player,chest)<85){if(pieces.every(p=>p.got)){won=true;say('TESOURO DESCOBERTO! Você venceu esta expedição!');document.getElementById('hint').textContent='Parabéns, explorador! Recarregue para jogar novamente.'}else say('O baú está trancado. Encontre os 3 fragmentos!')}
+ else if(pieces.some(p=>!p.got&&dist(player,p)<70))say('Aproxime-se para recolher o fragmento.')
+ else if(traps.some(t=>dist(player,t)<85))say('Cuidado! Há uma armadilha por perto.')
+ else say('Explore a ilha e procure os fragmentos do mapa.');
+};
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>

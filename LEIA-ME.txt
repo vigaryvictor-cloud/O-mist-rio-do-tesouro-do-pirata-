@@ -1,0 +1,15 @@
+O MISTÉRIO DO TESOURO PIRATA — PROTÓTIPO WEB
+
+Arquivos:
+- index.html: jogo jogável no navegador.
+- manifest.webmanifest, sw.js e icon.svg: suporte de instalação como PWA.
+
+Como testar:
+1. Hospede TODOS os arquivos em um endereço HTTPS (por exemplo, GitHub Pages ou Netlify).
+2. Abra o endereço no Chrome do Android.
+3. No menu do Chrome, escolha "Instalar app" ou "Adicionar à tela inicial".
+
+Importante:
+- Abrir index.html diretamente pelo gerenciador de arquivos permite testar em alguns navegadores, mas NÃO habilita instalação PWA/offline.
+- Este protótipo é uma primeira demonstração 2D com controles de toque. Não é o jogo 3D final, não tem multiplayer nem dinheiro real.
+- APK Android será uma etapa separada; este pacote não é APK.
